@@ -150,18 +150,18 @@ export function exportData(folders, prompts, favFolders, favorites) {
 export function importData(json) {
   if (json.version === 'supabase-v1') {
     return {
-      folders: json.folders,
-      prompts: json.prompts,
-      favFolders: json.favFolders,
-      favorites: json.favorites
+      folders: json.folders || [],
+      prompts: json.prompts || [],
+      favFolders: json.favFolders || [],
+      favorites: json.favorites || []
     };
   }
   if (json.folders && json.prompts) {
     return {
       folders: json.folders,
       prompts: json.prompts,
-      favFolders: [{ id: 'fav-root', name: '默认收藏', icon: '📌', children: [] }],
-      favorites: []
+      favFolders: json.favFolders || [],
+      favorites: json.favorites || []
     };
   }
   return null;
