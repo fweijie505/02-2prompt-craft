@@ -621,8 +621,17 @@ export default function PromptManager() {
     try {
       const res = await fetch(apiUrl, { method: 'POST', body: formData });
       const result = await res.json();
-      if (result?.data?.url) handleContentChange('images', [...(activePrompt.images || []), result.data.url]);
-    } catch (error) { alert('上云失败'); }
+      if (result?.success === true && result?.data?.url) {
+        handleContentChange('images', [...(activePrompt.images || []), result.data.url]);
+      } else {
+        const errMsg = result?.errors?.[0]?.message || result?.error?.message || '图片上传失败';
+        console.error('[uploadImage] failed:', result);
+        alert('上云失败：' + errMsg);
+      }
+    } catch (error) {
+      console.error('[uploadImage] network error:', error);
+      alert('上云失败：网络请求错误');
+    }
     setIsUploading(false);
   };
 
