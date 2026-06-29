@@ -73,6 +73,36 @@ export async function saveFullTable(table, userId, items) {
       return;
     }
 
+    // 收集当前 state 中所有 id
+    const idsInState = new Set(safeItems.map(item => String(item.id)));
+
+    // 先拉一下 Supabase 里已有的该用户数据，找出需要删除的 id
+    const { data: existing, error: fetchErr } = await supabase
+      .from(table)
+      .select('id')
+      .eq('user_id', userId);
+    if (fetchErr) {
+      console.error('[saveFullTable] fetch existing error:', fetchErr);
+      throw fetchErr;
+    }
+
+    // 批量删除不在新数组中的旧记录
+    if (existing) {
+      const toDelete = existing
+        .filter(row => !idsInState.has(String(row.id)))
+        .map(row => row.id);
+      if (toDelete.length > 0) {
+        const { error: delErr } = await supabase
+          .from(table)
+          .delete()
+          .in('id', toDelete);
+        if (delErr) {
+          console.error('[saveFullTable] delete stale error:', delErr);
+          throw delErr;
+        }
+      }
+    }
+
     // 分批 Upsert（每次最多 500 条，避免超出 Supabase 限制）
     const BATCH_SIZE = 500;
     for (let i = 0; i < safeItems.length; i += BATCH_SIZE) {
@@ -86,7 +116,6 @@ export async function saveFullTable(table, userId, items) {
         return row;
       });
 
-      // 使用 onConflict 指定 id 列（配合唯一约束 id,user_id）
       const { error: upsertErr } = await supabase
         .from(table)
         .upsert(rows, {
