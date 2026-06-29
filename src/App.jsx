@@ -871,7 +871,7 @@ export default function PromptManager() {
             📥 导入 JSON
             <input type="file" accept=".json" onChange={(e) => {
               const file = e.target.files[0]; if (!file) return;
-              const r = new FileReader(); r.onload = (evt) => {
+              const r = new FileReader(); r.onload = async (evt) => {
                 const p = JSON.parse(evt.target.result);
                 const imported = importData(p);
                 if (imported) {
@@ -879,15 +879,20 @@ export default function PromptManager() {
                   setPrompts(imported.prompts);
                   setFavFolders(imported.favFolders);
                   setFavorites(imported.favorites);
-                  // 导入后立即强制同步到 Supabase（不等 1s 防抖）
+                  // 立即同步到 Supabase 作为即时保险（不等 1s 防抖）
                   const uid = getUserId();
-                  Promise.all([
-                    saveFullTable('folders_data', uid, imported.folders),
-                    saveFullTable('prompts_data', uid, imported.prompts),
-                    saveFullTable('fav_folders_data', uid, imported.favFolders),
-                    saveFullTable('favorites_data', uid, imported.favorites),
-                  ]).catch(err => console.error('[import] sync error:', err));
-                  alert('🎉 配置已加载恢复！');
+                  try {
+                    await Promise.all([
+                      saveFullTable('folders_data', uid, imported.folders),
+                      saveFullTable('prompts_data', uid, imported.prompts),
+                      saveFullTable('fav_folders_data', uid, imported.favFolders),
+                      saveFullTable('favorites_data', uid, imported.favorites),
+                    ]);
+                    alert('🎉 配置已加载恢复并同步到云端！');
+                  } catch (err) {
+                    console.error('[import] sync error:', err);
+                    alert('⚠️ 配置已加载，但云端同步失败，请检查网络后重试。');
+                  }
                 }
               }; r.readAsText(file);
             }} className="hidden" />
