@@ -874,7 +874,21 @@ export default function PromptManager() {
               const r = new FileReader(); r.onload = (evt) => {
                 const p = JSON.parse(evt.target.result);
                 const imported = importData(p);
-                if (imported) { setFolders(imported.folders); setPrompts(imported.prompts); setFavFolders(imported.favFolders); setFavorites(imported.favorites); alert('🎉 配置已加载恢复！'); }
+                if (imported) {
+                  setFolders(imported.folders);
+                  setPrompts(imported.prompts);
+                  setFavFolders(imported.favFolders);
+                  setFavorites(imported.favorites);
+                  // 导入后立即强制同步到 Supabase（不等 1s 防抖）
+                  const uid = getUserId();
+                  Promise.all([
+                    saveFullTable('folders_data', uid, imported.folders),
+                    saveFullTable('prompts_data', uid, imported.prompts),
+                    saveFullTable('fav_folders_data', uid, imported.favFolders),
+                    saveFullTable('favorites_data', uid, imported.favorites),
+                  ]).catch(err => console.error('[import] sync error:', err));
+                  alert('🎉 配置已加载恢复！');
+                }
               }; r.readAsText(file);
             }} className="hidden" />
           </label>
