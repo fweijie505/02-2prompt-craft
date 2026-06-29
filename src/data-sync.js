@@ -55,10 +55,12 @@ export async function loadData(table, userId, fallback) {
 }
 
 // 通用：保存整个数据集到 Supabase（使用 Upsert：存在则更新，不存在则插入）
-export async function saveFullTable(table, userId, items) {
+// mode: 'sync'（日常同步，增量更新+删除） | 'replace'（导入/重置，先清空再插入）
+export async function saveFullTable(table, userId, items, mode) {
   try {
     const colMap = COL_MAP[table] || {};
     const safeItems = items || [];
+    const m = mode || 'sync';
 
     if (safeItems.length === 0) {
       // 如果 state 为空，只清空该用户的旧数据
@@ -73,32 +75,43 @@ export async function saveFullTable(table, userId, items) {
       return;
     }
 
-    // 收集当前 state 中所有 id
-    const idsInState = new Set(safeItems.map(item => String(item.id)));
+    if (m === 'replace') {
+      // 导入场景：先清空该用户的所有旧数据，再批量插入新数据
+      const { error: delErr } = await supabase
+        .from(table)
+        .delete()
+        .eq('user_id', userId);
+      if (delErr) {
+        console.error('[saveFullTable] replace delete error:', delErr);
+        throw delErr;
+      }
+      // 然后直接 upsert 新数据（此时库里没有旧数据了，upsert 等价于 insert）
+    } else {
+      // 日常同步场景：先找出需要删除的旧记录
+      const idsInState = new Set(safeItems.map(item => String(item.id)));
 
-    // 先拉一下 Supabase 里已有的该用户数据，找出需要删除的 id
-    const { data: existing, error: fetchErr } = await supabase
-      .from(table)
-      .select('id')
-      .eq('user_id', userId);
-    if (fetchErr) {
-      console.error('[saveFullTable] fetch existing error:', fetchErr);
-      throw fetchErr;
-    }
+      const { data: existing, error: fetchErr } = await supabase
+        .from(table)
+        .select('id')
+        .eq('user_id', userId);
+      if (fetchErr) {
+        console.error('[saveFullTable] fetch existing error:', fetchErr);
+        throw fetchErr;
+      }
 
-    // 批量删除不在新数组中的旧记录
-    if (existing) {
-      const toDelete = existing
-        .filter(row => !idsInState.has(String(row.id)))
-        .map(row => row.id);
-      if (toDelete.length > 0) {
-        const { error: delErr } = await supabase
-          .from(table)
-          .delete()
-          .in('id', toDelete);
-        if (delErr) {
-          console.error('[saveFullTable] delete stale error:', delErr);
-          throw delErr;
+      if (existing) {
+        const toDelete = existing
+          .filter(row => !idsInState.has(String(row.id)))
+          .map(row => row.id);
+        if (toDelete.length > 0) {
+          const { error: delErr } = await supabase
+            .from(table)
+            .delete()
+            .in('id', toDelete);
+          if (delErr) {
+            console.error('[saveFullTable] delete stale error:', delErr);
+            throw delErr;
+          }
         }
       }
     }
