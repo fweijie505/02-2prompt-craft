@@ -86,10 +86,11 @@ export async function saveFullTable(table, userId, items) {
         return row;
       });
 
+      // 使用 onConflict 指定 id 列（配合唯一约束 id,user_id）
       const { error: upsertErr } = await supabase
         .from(table)
         .upsert(rows, {
-          onConflict: 'id,user_id',
+          onConflict: 'id',
           ignoreDuplicates: false
         });
 
