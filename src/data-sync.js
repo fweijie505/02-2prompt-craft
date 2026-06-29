@@ -14,6 +14,15 @@ const COL_MAP = {
   images_data: { promptId: 'prompt_id', sortOrder: 'sort_order' },
 };
 
+// 每张表允许的列名白名单（JS 字段名，不含 user_id/created_at/updated_at）
+const ALLOWED_COLS = {
+  prompts_data: ['id', 'folderId', 'title', 'content', 'reference', 'tags', 'stars', 'sortKey', 'images'],
+  folders_data: ['id', 'name', 'icon', 'isOpen'],
+  favorites_data: ['id', 'promptId', 'favFolderId'],
+  fav_folders_data: ['id', 'name', 'icon'],
+  images_data: ['id', 'promptId', 'sortOrder'],
+};
+
 // 反向映射：DB snake_case → JS camelCase
 const REVERSE_COL_MAP = {};
 for (const [table, mappings] of Object.entries(COL_MAP)) {
@@ -118,11 +127,14 @@ export async function saveFullTable(table, userId, items, mode) {
 
     // 分批 Upsert（每次最多 500 条，避免超出 Supabase 限制）
     const BATCH_SIZE = 500;
+    const allowed = ALLOWED_COLS[table] || null;
     for (let i = 0; i < safeItems.length; i += BATCH_SIZE) {
       const batch = safeItems.slice(i, i + BATCH_SIZE);
       const rows = batch.map(item => {
         const row = { user_id: userId };
         for (const [key, val] of Object.entries(item)) {
+          // 只保留白名单内的列，丢弃数据库中不存在的旧字段（如 starred）
+          if (allowed && !allowed.includes(key)) continue;
           row[colMap[key] || key] = val;
         }
         row.id = item.id;
