@@ -617,6 +617,7 @@ export default function PromptManager() {
     setIsUploading(true);
     setUploadProgress(0);
     const formData = new FormData();
+    formData.append('image', file);
     const finalKey = cleanApiKey || '10b80980dc24754a6be2372f6a73ba9a';
     const apiUrl = `https://api.imgbb.com/1/upload?key=${finalKey}`;
 
