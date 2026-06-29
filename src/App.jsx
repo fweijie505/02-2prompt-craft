@@ -73,6 +73,7 @@ export default function PromptManager() {
   const [scratchpadText, setScratchpadText] = useState('');
   const [copyStatus, setCopyStatus] = useState('复制到剪贴板');
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0); // 0~100
   const [searchQuery, setSearchQuery] = useState('');
   const [showFavPicker, setShowFavPicker] = useState(false);
   const [showFavManager, setShowFavManager] = useState(false);
@@ -614,25 +615,58 @@ export default function PromptManager() {
     if (!file) return;
     const cleanApiKey = (imgBedConfig.apiKey || '').trim();
     setIsUploading(true);
+    setUploadProgress(0);
     const formData = new FormData();
     const finalKey = cleanApiKey || '10b80980dc24754a6be2372f6a73ba9a';
-    let apiUrl = `https://api.imgbb.com/1/upload?key=${finalKey}`;
-    formData.append('image', file);
-    try {
-      const res = await fetch(apiUrl, { method: 'POST', body: formData });
-      const result = await res.json();
-      if (result?.success === true && result?.data?.url) {
-        handleContentChange('images', [...(activePrompt.images || []), result.data.url]);
-      } else {
-        const errMsg = result?.errors?.[0]?.message || result?.error?.message || '图片上传失败';
-        console.error('[uploadImage] failed:', result);
-        alert('上云失败：' + errMsg);
-      }
-    } catch (error) {
-      console.error('[uploadImage] network error:', error);
-      alert('上云失败：网络请求错误');
-    }
-    setIsUploading(false);
+    const apiUrl = `https://api.imgbb.com/1/upload?key=${finalKey}`;
+
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', apiUrl, true);
+
+      // 上传进度（客户端 → 服务器）
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          setUploadProgress(pct);
+        }
+      };
+
+      xhr.onload = () => {
+        try {
+          const result = JSON.parse(xhr.responseText);
+          if (result?.success === true && result?.data?.url) {
+            handleContentChange('images', [...(activePrompt.images || []), result.data.url]);
+            setUploadProgress(100);
+            setTimeout(() => { setUploadProgress(0); setIsUploading(false); }, 800);
+            resolve(result.data.url);
+          } else {
+            const errMsg = result?.errors?.[0]?.message || result?.error?.message || '图片上传失败';
+            console.error('[uploadImage] failed:', result);
+            alert('上云失败：' + errMsg);
+            setUploadProgress(0);
+            setIsUploading(false);
+            reject(new Error(errMsg));
+          }
+        } catch (e) {
+          console.error('[uploadImage] parse error:', e);
+          alert('上云失败：响应解析错误');
+          setUploadProgress(0);
+          setIsUploading(false);
+          reject(e);
+        }
+      };
+
+      xhr.onerror = () => {
+        console.error('[uploadImage] network error');
+        alert('上云失败：网络请求错误');
+        setUploadProgress(0);
+        setIsUploading(false);
+        reject(new Error('Network error'));
+      };
+
+      xhr.send(formData);
+    });
   };
 
   // 图片排序
@@ -1524,10 +1558,18 @@ export default function PromptManager() {
                           <label
                             onDragOver={(e) => e.preventDefault()}
                             onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f?.type.startsWith('image/')) uploadImageToCloud(f); }}
-                            className={`h-24 border border-dashed ${currentTheme.border} hover:border-slate-400 transition rounded-lg flex flex-col items-center justify-center cursor-pointer bg-black/10`}
+                            className={`h-24 border border-dashed ${currentTheme.border} hover:border-slate-400 transition rounded-lg flex flex-col items-center justify-center cursor-pointer bg-black/10 relative overflow-hidden`}
                           >
                             <input type="file" accept="image/*" onChange={(e) => { if (e.target.files[0]) uploadImageToCloud(e.target.files[0]); }} className="hidden" disabled={isUploading} />
-                            <span className="text-[11px] text-slate-500">{isUploading ? '上传中...' : '+ 添加图片'}</span>
+                            {isUploading ? (
+                              <>
+                                <div className="absolute inset-0 bg-blue-500/10" />
+                                <div className="absolute bottom-0 left-0 h-1 bg-blue-500 transition-all duration-200" style={{ width: `${uploadProgress}%` }} />
+                                <span className="relative text-[11px] text-blue-400 font-medium">上传中 {uploadProgress}%</span>
+                              </>
+                            ) : (
+                              <span className="text-[11px] text-slate-500">+ 添加图片</span>
+                            )}
                           </label>
                         )}
                       </div>
