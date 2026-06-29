@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+@theme {
+  /* 这里可以扩展你的自定义主题，v4.0 默认已经内置了完整的 slate 颜色组 */
+}
+
+/* 确保全身铺满深色背景 */
+html, body, #root {
+  background-color: #0f172a; /* 对应 bg-slate-900 */
+  color: #f1f5f9;            /* 对应 text-slate-100 */
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+}
