@@ -879,19 +879,19 @@ export default function PromptManager() {
                   setPrompts(imported.prompts);
                   setFavFolders(imported.favFolders);
                   setFavorites(imported.favorites);
-                  // 立即同步到 Supabase 作为即时保险（不等 1s 防抖）
+                  // 导入是全量替换，用 mode='replace' 先清空再 upsert
                   const uid = getUserId();
                   try {
                     await Promise.all([
-                      saveFullTable('folders_data', uid, imported.folders),
-                      saveFullTable('prompts_data', uid, imported.prompts),
-                      saveFullTable('fav_folders_data', uid, imported.favFolders),
-                      saveFullTable('favorites_data', uid, imported.favorites),
+                      saveFullTable('folders_data', uid, imported.folders, 'replace'),
+                      saveFullTable('prompts_data', uid, imported.prompts, 'replace'),
+                      saveFullTable('fav_folders_data', uid, imported.favFolders, 'replace'),
+                      saveFullTable('favorites_data', uid, imported.favorites, 'replace'),
                     ]);
                     alert('🎉 配置已加载恢复并同步到云端！');
                   } catch (err) {
                     console.error('[import] sync error:', err);
-                    alert('⚠️ 配置已加载，但云端同步失败，请检查网络后重试。');
+                    alert('⚠️ 配置已加载，但云端同步失败：' + err.message);
                   }
                 }
               }; r.readAsText(file);
